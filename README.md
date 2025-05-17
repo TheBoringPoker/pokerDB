@@ -14,14 +14,20 @@ The tests require network access to download dependencies (GORM and database dri
 
 ## Database Integration
 
-The `storage` package provides a simple wrapper around GORM with support for MySQL, PostgreSQL and SQLite. Configure the `Dialect` and `DSN` fields in `storage.Config` to connect to the desired backend. SQLite can be used for local testing:
+The `storage` package provides a simple wrapper around GORM with support for MySQL, PostgreSQL and SQLite. Configure the `Dialect` and `DSN` fields in `storage.Config` to connect to the desired backend. SQLite can be used for local testing without any external services:
 
 ```go
 cfg := storage.Config{Dialect: storage.DialectSQLite, DSN: "file:test.db?cache=shared&mode=memory"}
 db, err := storage.NewDB(cfg)
 ```
 
-Tables are created automatically using `AutoMigrate`.
+Tables are created automatically using `AutoMigrate`. UUID primary keys are generated in Go so that SQLite works out of the box without additional extensions.
+
+## Concurrency
+
+`Game` objects may be used by multiple goroutines. The struct now embeds a
+mutex so operations like `Start`, `Deal`, `AddAction` and `ActionStrings` are
+safe for concurrent use.
 
 ## Compact Action Log
 

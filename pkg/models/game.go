@@ -9,44 +9,53 @@ import (
 	"pokerDB/pkg/constants"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 type Game struct {
-	ID              uuid.UUID `json:"id" gorm:"primary_key;type:uuid;default:uuid_generate_v4()"`
-	TableID         uuid.UUID `json:"table_id" gorm:"type:uuid"`
-	CardSequence    []int     `json:"card_sequence" gorm:"type:integer[]"`
-	StartedTime     time.Time `json:"started_time" gorm:"type:timestamp"`
-	EndedTime       time.Time `json:"ended_time" gorm:"type:timestamp"`
-	PersonCount     int       `json:"person_count" gorm:"type:integer"`
-	Ante            int64     `json:"ante" gorm:"type:bigint"`
-	SmallBlind      int64     `json:"small_blind" gorm:"type:bigint"`
-	BigBlind        int64     `json:"big_blind" gorm:"type:bigint"`
-	AllowRunItTwice bool      `json:"allow_run_it_twice" gorm:"type:boolean"`
-	AllowStraddle   bool      `json:"allow_straddle" gorm:"type:boolean"`
-	ActionLog       ActionLog `json:"action_log" gorm:"type:json"`
-	Ledgers         []Ledger  `json:"ledgers"`
-	NextCardIndex   int       `json:"-" gorm:"-"`
+	ID              uuid.UUID    `json:"id" gorm:"primaryKey;type:uuid"`
+	TableID         uuid.UUID    `json:"table_id" gorm:"type:uuid"`
+	CardSequence    IntSlice     `json:"card_sequence" gorm:"type:json"`
+	StartedTime     time.Time    `json:"started_time" gorm:"type:timestamp"`
+	EndedTime       time.Time    `json:"ended_time" gorm:"type:timestamp"`
+	PersonCount     int          `json:"person_count" gorm:"type:integer"`
+	Ante            int64        `json:"ante" gorm:"type:bigint"`
+	SmallBlind      int64        `json:"small_blind" gorm:"type:bigint"`
+	BigBlind        int64        `json:"big_blind" gorm:"type:bigint"`
+	AllowRunItTwice bool         `json:"allow_run_it_twice" gorm:"type:boolean"`
+	AllowStraddle   bool         `json:"allow_straddle" gorm:"type:boolean"`
+	ActionLog       ActionLog    `json:"action_log" gorm:"type:json"`
+	Ledgers         []Ledger     `json:"ledgers"`
+	NextCardIndex   int          `json:"-" gorm:"-"`
+	mu              sync.RWMutex `json:"-" gorm:"-"`
 }
 
 func NewGame(tableID uuid.UUID, personCount int) *Game {
 	return &Game{
+		ID:           uuid.New(),
 		TableID:      tableID,
-		CardSequence: constants.CardSequence,
+		CardSequence: IntSlice(constants.CardSequence),
 		PersonCount:  personCount,
 		ActionLog:    ActionLog{},
 	}
 }
 
 func (g *Game) Started() bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
 	return !g.StartedTime.IsZero()
 }
 
 func (g *Game) Ended() bool {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
 	return !g.EndedTime.IsZero()
 }
 
 func (g *Game) Start() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	if g.Started() {
 		logrus.Warn("Game already started")
 		return errors.New("game already started")
@@ -72,7 +81,7 @@ func (g *Game) Start() error {
 	copy(shuffled, constants.CardSequence)
 	rand.Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
 	logrus.Info("Shuffled Sequences: ", shuffled)
-	g.CardSequence = shuffled
+	g.CardSequence = IntSlice(shuffled)
 	g.NextCardIndex = 0
 	startEntry := fmt.Sprintf("G:%d:%d:%d:%d:%d,%d", g.SmallBlind, g.BigBlind, g.Ante, boolToInt(g.AllowRunItTwice), boolToInt(g.AllowStraddle), g.StartedTime.Unix())
 	g.ActionLog = append(g.ActionLog, startEntry)
@@ -80,6 +89,8 @@ func (g *Game) Start() error {
 }
 
 func (g *Game) End() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	if !g.Started() {
 		logrus.Warn("Game not started")
 		return errors.New("game not started")
@@ -108,13 +119,23 @@ func (g *Game) End() error {
 // underlying deck. The index is advanced so subsequent calls return the next
 // cards in order. If there are not enough cards remaining, an empty slice is
 // returned.
-func (g *Game) Deal(count int) []int {
+func (g *Game) dealNoLock(count int) []int {
 	if g.NextCardIndex+count > len(g.CardSequence) {
 		return []int{}
 	}
-	cards := g.CardSequence[g.NextCardIndex : g.NextCardIndex+count]
+	seq := g.CardSequence[g.NextCardIndex : g.NextCardIndex+count]
+	cards := make([]int, len(seq))
+	for i, v := range seq {
+		cards[i] = v
+	}
 	g.NextCardIndex += count
 	return cards
+}
+
+func (g *Game) Deal(count int) []int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.dealNoLock(count)
 }
 
 // DealHands deals two cards to each player and returns a slice of hands where
@@ -122,15 +143,19 @@ func (g *Game) Deal(count int) []int {
 // DealHands returns a slice of player hands without altering the card
 // sequence, relying on Deal to advance the index.
 func (g *Game) DealHands() [][]int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	hands := make([][]int, g.PersonCount)
 	for i := 0; i < g.PersonCount; i++ {
-		hands[i] = g.Deal(2)
+		hands[i] = g.dealNoLock(2)
 	}
 	return hands
 }
 
 // AddAction appends a new action to the game.
 func (g *Game) AddAction(playerID uuid.UUID, code string, amount int64) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	id := playerID.String()
 	if len(id) > 8 {
 		id = id[:8]
@@ -141,6 +166,8 @@ func (g *Game) AddAction(playerID uuid.UUID, code string, amount int64) {
 
 // ActionStrings returns human readable lines describing actions in order.
 func (g *Game) ActionStrings() []string {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
 	lines := make([]string, len(g.ActionLog))
 	for i, raw := range g.ActionLog {
 		parts := strings.SplitN(raw, ",", 2)
