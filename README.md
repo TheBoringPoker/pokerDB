@@ -10,6 +10,10 @@ This project uses Go modules. To run the unit tests:
 go test ./...
 ```
 
+All tests run purely in-memory and no external database server is required. The
+integration test in `pkg/storage` uses SQLite and is skipped by default because
+the SQLite driver cannot auto migrate UUID defaults.
+
 The tests require network access to download dependencies (GORM and database drivers). In completely offline environments they will fail during module download.
 SQLite integration tests rely on CGO for the `go-sqlite3` driver. When `CGO_ENABLED=0` the tests will be automatically skipped.
 

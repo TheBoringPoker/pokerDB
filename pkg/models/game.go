@@ -56,12 +56,14 @@ func (g *Game) Ended() bool {
 func (g *Game) Start() error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if g.Started() {
+	// check timestamps directly while holding the lock to avoid
+	// re-entrantly acquiring the mutex via Started() or Ended()
+	if !g.StartedTime.IsZero() {
 		logrus.Warn("Game already started")
 		return errors.New("game already started")
 	}
 
-	if g.Ended() {
+	if !g.EndedTime.IsZero() {
 		logrus.Warn("Game already ended")
 		return errors.New("game already ended")
 	}
@@ -91,11 +93,12 @@ func (g *Game) Start() error {
 func (g *Game) End() error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if !g.Started() {
+	// check timestamps directly to avoid re-entrant mutex locking
+	if g.StartedTime.IsZero() {
 		logrus.Warn("Game not started")
 		return errors.New("game not started")
 	}
-	if g.Ended() {
+	if !g.EndedTime.IsZero() {
 		logrus.Warn("Game already ended")
 		return errors.New("game already ended")
 	}
