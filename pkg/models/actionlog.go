@@ -16,6 +16,26 @@ const (
 	ActionRunTwice = "T" // players choose run it twice/once
 )
 
+// ActionWords maps short action codes to fully spelled words used
+// when formatting a game's action log.
+var ActionWords = map[string]string{
+	ActionRaise:    "raise",
+	ActionFold:     "fold",
+	ActionCheck:    "check",
+	ActionAllIn:    "all-in",
+	ActionStraddle: "straddle",
+	ActionRunTwice: "run-twice",
+}
+
+// ActionToWord returns a human readable word for the given action
+// code. Unknown codes are returned unchanged.
+func ActionToWord(code string) string {
+	if w, ok := ActionWords[code]; ok {
+		return w
+	}
+	return code
+}
+
 // ActionLog stores encoded action strings. It is persisted as JSON
 // in the database so that different SQL backends can store it uniformly.
 type ActionLog []string

@@ -45,7 +45,15 @@ c0ffee01R500,1692300020            // player c0ffee01 raises to 500
 E:c0ffee00=1000:c0ffee01=-1000,1692300100 // final ledger
 ```
 
-`Game.ActionStrings()` formats these entries into human readable lines.
+`Game.ActionStrings()` formats these entries into human readable lines. Example
+output:
+
+```
+start sb=50 bb=100 ante=0 runTwice=1 straddle=0 at 2023-08-18T15:00:00Z
+c0ffee00 check 0 at 2023-08-18T15:00:10Z
+c0ffee01 raise 500 at 2023-08-18T15:00:20Z
+result [c0ffee00=1000 c0ffee01=-1000] at 2023-08-18T15:01:40Z
+```
 
 ## Project Structure
 
