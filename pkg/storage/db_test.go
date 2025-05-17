@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -14,6 +15,9 @@ func TestSQLiteIntegration(t *testing.T) {
 	cfg := Config{Dialect: DialectSQLite, DSN: "file::memory:?cache=shared"}
 	db, err := NewDB(cfg)
 	if err != nil {
+		if strings.Contains(err.Error(), "CGO_ENABLED=0") {
+			t.Skip("sqlite driver requires CGO, skipping")
+		}
 		t.Fatalf("failed to open sqlite: %v", err)
 	}
 
