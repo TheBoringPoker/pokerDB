@@ -164,7 +164,8 @@ func (g *Game) ActionStrings() []string {
 			pid := body[:8]
 			code := string(body[8])
 			amt := body[9:]
-			lines[i] = fmt.Sprintf("%s %s %s at %s", pid, code, amt, time.Unix(ts, 0).Format(time.RFC3339))
+			word := ActionToWord(code)
+			lines[i] = fmt.Sprintf("%s %s %s at %s", pid, word, amt, time.Unix(ts, 0).Format(time.RFC3339))
 			continue
 		}
 		lines[i] = raw
