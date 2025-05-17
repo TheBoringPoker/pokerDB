@@ -1,3 +1,5 @@
+// Package models defines the data structures for pokerDB.
+// Generated with OpenAI Codex; provided without warranty.
 package models
 
 import (

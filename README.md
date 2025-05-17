@@ -1,6 +1,8 @@
 # pokerDB
 
-This repository contains a small poker toolkit written in Go. The project focuses on describing poker games and now includes a basic data layer using GORM to persist games and actions across multiple SQL databases.
+This project was created with the help of the **OpenAI Codex** system under the direction of the author. It is an experimental coding agent project that provides a foundation data model for poker games. No functionality is guaranteed.
+
+The repository contains a small poker toolkit written in Go. The project focuses on describing poker games and now includes a basic data layer using GORM to persist games and actions across multiple SQL databases.
 
 ## Building and Testing
 
@@ -12,6 +14,18 @@ go test ./...
 
 The tests require network access to download dependencies (GORM and database drivers). In completely offline environments they will fail during module download.
 SQLite integration tests rely on CGO for the `go-sqlite3` driver. When `CGO_ENABLED=0` the tests will be automatically skipped.
+
+The example command line program can be built on any platform supported by Go. The toolkit has been used on Ubuntu and macOS with Go 1.20:
+
+```bash
+go build ./cmd
+```
+
+You may also run it directly:
+
+```bash
+go run ./cmd
+```
 
 ## Database Integration
 
@@ -63,5 +77,10 @@ result [c0ffee00=1000 c0ffee01=-1000] at 2023-08-18T15:01:40Z
 - `pkg/storage/` – database connection helpers
 - `pkg/rules/` – poker evaluation and game rules
 - `pkg/utils/` – utility helpers
+
+
+## Disclaimer
+
+This repository is provided as an educational experiment. It was generated using OpenAI Codex and assembled by the author. The software is offered as-is with no guarantee of correctness or fitness for any purpose.
 
 
