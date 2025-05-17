@@ -13,9 +13,9 @@ import (
 )
 
 type Game struct {
-	ID              uuid.UUID `json:"id" gorm:"primary_key;type:uuid;default:uuid_generate_v4()"`
+	ID              uuid.UUID `json:"id" gorm:"primaryKey;type:uuid"`
 	TableID         uuid.UUID `json:"table_id" gorm:"type:uuid"`
-	CardSequence    []int     `json:"card_sequence" gorm:"type:integer[]"`
+	CardSequence    IntSlice  `json:"card_sequence" gorm:"type:json"`
 	StartedTime     time.Time `json:"started_time" gorm:"type:timestamp"`
 	EndedTime       time.Time `json:"ended_time" gorm:"type:timestamp"`
 	PersonCount     int       `json:"person_count" gorm:"type:integer"`
@@ -31,8 +31,9 @@ type Game struct {
 
 func NewGame(tableID uuid.UUID, personCount int) *Game {
 	return &Game{
+		ID:           uuid.New(),
 		TableID:      tableID,
-		CardSequence: constants.CardSequence,
+		CardSequence: IntSlice(constants.CardSequence),
 		PersonCount:  personCount,
 		ActionLog:    ActionLog{},
 	}
@@ -72,7 +73,7 @@ func (g *Game) Start() error {
 	copy(shuffled, constants.CardSequence)
 	rand.Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
 	logrus.Info("Shuffled Sequences: ", shuffled)
-	g.CardSequence = shuffled
+	g.CardSequence = IntSlice(shuffled)
 	g.NextCardIndex = 0
 	startEntry := fmt.Sprintf("G:%d:%d:%d:%d:%d,%d", g.SmallBlind, g.BigBlind, g.Ante, boolToInt(g.AllowRunItTwice), boolToInt(g.AllowStraddle), g.StartedTime.Unix())
 	g.ActionLog = append(g.ActionLog, startEntry)
@@ -112,7 +113,7 @@ func (g *Game) Deal(count int) []int {
 	if g.NextCardIndex+count > len(g.CardSequence) {
 		return []int{}
 	}
-	cards := g.CardSequence[g.NextCardIndex : g.NextCardIndex+count]
+	cards := []int(g.CardSequence[g.NextCardIndex : g.NextCardIndex+count])
 	g.NextCardIndex += count
 	return cards
 }
