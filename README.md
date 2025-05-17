@@ -11,6 +11,7 @@ go test ./...
 ```
 
 The tests require network access to download dependencies (GORM and database drivers). In completely offline environments they will fail during module download.
+SQLite integration tests rely on CGO for the `go-sqlite3` driver. When `CGO_ENABLED=0` the tests will be automatically skipped.
 
 ## Database Integration
 
