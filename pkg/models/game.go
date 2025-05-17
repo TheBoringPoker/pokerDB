@@ -2,21 +2,31 @@ package models
 
 import (
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"math/rand"
 	"pokerDB/pkg/constants"
+	"strconv"
+	"strings"
 	"time"
 )
 
 type Game struct {
-	ID            uuid.UUID `json:"id" gorm:"primary_key;type:uuid;default:uuid_generate_v4()"`
-	TableID       uuid.UUID `json:"table_id" gorm:"type:uuid"`
-	CardSequence  []int     `json:"card_sequence" gorm:"type:integer[]"`
-	StartedTime   time.Time `json:"started_time" gorm:"type:timestamp"`
-	EndedTime     time.Time `json:"ended_time" gorm:"type:timestamp"`
-	PersonCount   int       `json:"person_count" gorm:"type:integer"`
-	NextCardIndex int       `json:"-" gorm:"-"`
+	ID              uuid.UUID `json:"id" gorm:"primary_key;type:uuid;default:uuid_generate_v4()"`
+	TableID         uuid.UUID `json:"table_id" gorm:"type:uuid"`
+	CardSequence    []int     `json:"card_sequence" gorm:"type:integer[]"`
+	StartedTime     time.Time `json:"started_time" gorm:"type:timestamp"`
+	EndedTime       time.Time `json:"ended_time" gorm:"type:timestamp"`
+	PersonCount     int       `json:"person_count" gorm:"type:integer"`
+	Ante            int64     `json:"ante" gorm:"type:bigint"`
+	SmallBlind      int64     `json:"small_blind" gorm:"type:bigint"`
+	BigBlind        int64     `json:"big_blind" gorm:"type:bigint"`
+	AllowRunItTwice bool      `json:"allow_run_it_twice" gorm:"type:boolean"`
+	AllowStraddle   bool      `json:"allow_straddle" gorm:"type:boolean"`
+	ActionLog       ActionLog `json:"action_log" gorm:"type:json"`
+	Ledgers         []Ledger  `json:"ledgers"`
+	NextCardIndex   int       `json:"-" gorm:"-"`
 }
 
 func NewGame(tableID uuid.UUID, personCount int) *Game {
@@ -24,6 +34,7 @@ func NewGame(tableID uuid.UUID, personCount int) *Game {
 		TableID:      tableID,
 		CardSequence: constants.CardSequence,
 		PersonCount:  personCount,
+		ActionLog:    ActionLog{},
 	}
 }
 
@@ -63,6 +74,8 @@ func (g *Game) Start() error {
 	logrus.Info("Shuffled Sequences: ", shuffled)
 	g.CardSequence = shuffled
 	g.NextCardIndex = 0
+	startEntry := fmt.Sprintf("G:%d:%d:%d:%d:%d,%d", g.SmallBlind, g.BigBlind, g.Ante, boolToInt(g.AllowRunItTwice), boolToInt(g.AllowStraddle), g.StartedTime.Unix())
+	g.ActionLog = append(g.ActionLog, startEntry)
 	return nil
 }
 
@@ -76,6 +89,16 @@ func (g *Game) End() error {
 		return errors.New("game already ended")
 	}
 	g.EndedTime = time.Now()
+	pairs := make([]string, len(g.Ledgers))
+	for i, l := range g.Ledgers {
+		id := l.PlayerID.String()
+		if len(id) > 8 {
+			id = id[:8]
+		}
+		pairs[i] = fmt.Sprintf("%s=%d", id, l.Balance)
+	}
+	endEntry := fmt.Sprintf("E:%s,%d", strings.Join(pairs, ":"), g.EndedTime.Unix())
+	g.ActionLog = append(g.ActionLog, endEntry)
 	return nil
 }
 
@@ -104,4 +127,54 @@ func (g *Game) DealHands() [][]int {
 		hands[i] = g.Deal(2)
 	}
 	return hands
+}
+
+// AddAction appends a new action to the game.
+func (g *Game) AddAction(playerID uuid.UUID, code string, amount int64) {
+	id := playerID.String()
+	if len(id) > 8 {
+		id = id[:8]
+	}
+	entry := fmt.Sprintf("%s%s%d,%d", id, code, amount, time.Now().Unix())
+	g.ActionLog = append(g.ActionLog, entry)
+}
+
+// ActionStrings returns human readable lines describing actions in order.
+func (g *Game) ActionStrings() []string {
+	lines := make([]string, len(g.ActionLog))
+	for i, raw := range g.ActionLog {
+		parts := strings.SplitN(raw, ",", 2)
+		if len(parts) != 2 {
+			lines[i] = raw
+			continue
+		}
+		ts, _ := strconv.ParseInt(parts[1], 10, 64)
+		body := parts[0]
+		if strings.HasPrefix(body, "G:") {
+			fields := strings.Split(body[2:], ":")
+			if len(fields) >= 5 {
+				lines[i] = fmt.Sprintf("start sb=%s bb=%s ante=%s runTwice=%s straddle=%s at %s", fields[0], fields[1], fields[2], fields[3], fields[4], time.Unix(ts, 0).Format(time.RFC3339))
+				continue
+			}
+		} else if strings.HasPrefix(body, "E:") {
+			fields := strings.Split(body[2:], ":")
+			lines[i] = fmt.Sprintf("result %v at %s", fields, time.Unix(ts, 0).Format(time.RFC3339))
+			continue
+		} else if len(body) >= 9 {
+			pid := body[:8]
+			code := string(body[8])
+			amt := body[9:]
+			lines[i] = fmt.Sprintf("%s %s %s at %s", pid, code, amt, time.Unix(ts, 0).Format(time.RFC3339))
+			continue
+		}
+		lines[i] = raw
+	}
+	return lines
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
