@@ -23,6 +23,12 @@ db, err := storage.NewDB(cfg)
 
 Tables are created automatically using `AutoMigrate`.
 
+## Concurrency
+
+`Game` objects may be used by multiple goroutines. The struct now embeds a
+mutex so operations like `Start`, `Deal`, `AddAction` and `ActionStrings` are
+safe for concurrent use.
+
 ## Compact Action Log
 
 Each `Game` stores a slice of encoded strings describing every event. The first
