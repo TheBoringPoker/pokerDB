@@ -56,6 +56,14 @@ c0ffee01 raise 500 at 2023-08-18T15:00:20Z
 result [c0ffee00=1000 c0ffee01=-1000] at 2023-08-18T15:01:40Z
 ```
 
+## Action Validation
+
+The `validate` package checks recorded actions for consistency. It ensures
+raises satisfy minimum sizing rules and optionally verifies players have
+sufficient chips when calling or raising. Invoke `validate.Validate` with a game
+and an optional map of starting chip counts keyed by the truncated player IDs
+found in the action log.
+
 ## Project Structure
 
 - `cmd/` – example main program
@@ -63,5 +71,6 @@ result [c0ffee00=1000 c0ffee01=-1000] at 2023-08-18T15:01:40Z
 - `pkg/storage/` – database connection helpers
 - `pkg/rules/` – poker evaluation and game rules
 - `pkg/utils/` – utility helpers
+- `pkg/rules/validate/` – action log validation helpers
 
 
