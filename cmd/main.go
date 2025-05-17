@@ -1,3 +1,5 @@
+// Command line demonstration program for the pokerDB toolkit.
+// Generated with OpenAI Codex; functionality is not guaranteed.
 package main
 
 import (
