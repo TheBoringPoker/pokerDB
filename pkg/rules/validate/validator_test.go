@@ -11,12 +11,20 @@ func TestValidateGameValid(t *testing.T) {
 	g := models.NewGame(uuid.New(), 2)
 	g.SmallBlind = 50
 	g.BigBlind = 100
+	g.MinBuyIn = 100
+	g.MaxBuyIn = 1000
+	p1 := uuid.New()
+	p2 := uuid.New()
+	if err := g.BuyIn(p1, 500); err != nil {
+		t.Fatalf("buyin p1: %v", err)
+	}
+	if err := g.BuyIn(p2, 500); err != nil {
+		t.Fatalf("buyin p2: %v", err)
+	}
 	if err := g.Start(); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	p1 := uuid.New()
-	p2 := uuid.New()
-	g.AddAction(p1, models.ActionCheck, 0)
+	g.AddAction(p1, models.ActionCheck, 100)
 	g.AddAction(p2, models.ActionRaise, 300)
 	g.AddAction(p1, models.ActionFold, 0)
 	if err := g.End(); err != nil {
@@ -36,11 +44,19 @@ func TestValidateGameInvalidRaise(t *testing.T) {
 	g := models.NewGame(uuid.New(), 2)
 	g.SmallBlind = 50
 	g.BigBlind = 100
+	g.MinBuyIn = 100
+	g.MaxBuyIn = 1000
+	p1 := uuid.New()
+	p2 := uuid.New()
+	if err := g.BuyIn(p1, 500); err != nil {
+		t.Fatalf("buyin p1: %v", err)
+	}
+	if err := g.BuyIn(p2, 500); err != nil {
+		t.Fatalf("buyin p2: %v", err)
+	}
 	if err := g.Start(); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	p1 := uuid.New()
-	p2 := uuid.New()
 	g.AddAction(p1, models.ActionRaise, 200)
 	g.AddAction(p2, models.ActionRaise, 250)
 	if err := g.End(); err != nil {
@@ -56,12 +72,20 @@ func TestValidateGameInsufficientCall(t *testing.T) {
 	g := models.NewGame(uuid.New(), 2)
 	g.SmallBlind = 50
 	g.BigBlind = 100
+	g.MinBuyIn = 100
+	g.MaxBuyIn = 1000
+	p1 := uuid.New()
+	p2 := uuid.New()
+	if err := g.BuyIn(p1, 500); err != nil {
+		t.Fatalf("buyin p1: %v", err)
+	}
+	if err := g.BuyIn(p2, 500); err != nil {
+		t.Fatalf("buyin p2: %v", err)
+	}
 	if err := g.Start(); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	p1 := uuid.New()
-	p2 := uuid.New()
-	g.AddAction(p1, models.ActionCheck, 0)
+	g.AddAction(p1, models.ActionCheck, 100)
 	g.AddAction(p2, models.ActionRaise, 300)
 	g.AddAction(p1, models.ActionCheck, 300)
 	if err := g.End(); err != nil {

@@ -53,8 +53,8 @@ safe for concurrent use.
 Each `Game` stores a slice of encoded strings describing every event. The first
 entry records the game options (blinds, ante, whether run-it-twice or straddle
 are allowed) and the last entry captures final ledger balances. Intermediate
-entries encode player actions such as raise, fold, check, all-in, straddle and
-run-it-twice selections. Example entries:
+entries encode player actions such as raise, fold, check, all-in, straddle,
+buy-ins and run-it-twice selections. Example entries:
 
 ```
 G:50:100:0:1:0,1692300000         // game start with small blind, big blind,
@@ -73,6 +73,14 @@ c0ffee00 check 0 at 2023-08-18T15:00:10Z
 c0ffee01 raise 500 at 2023-08-18T15:00:20Z
 result [c0ffee00=1000 c0ffee01=-1000] at 2023-08-18T15:01:40Z
 ```
+
+## Buy-In Handling
+
+Games define `MinBuyIn` and `MaxBuyIn` limits. Players must call
+`Game.BuyIn` before the first hand is dealt. Buy-ins are recorded as
+`B` entries in the action log and cannot occur once the game has
+started. Starting the game fails if the number of buy-ins does not
+match `PersonCount` or if any amounts are outside the allowed range.
 
 ## Action Validation
 
