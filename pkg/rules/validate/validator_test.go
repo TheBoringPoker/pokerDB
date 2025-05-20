@@ -24,9 +24,15 @@ func TestValidateGameValid(t *testing.T) {
 	if err := g.Start(); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	g.AddAction(p1, models.ActionCheck, 100)
-	g.AddAction(p2, models.ActionRaise, 300)
-	g.AddAction(p1, models.ActionFold, 0)
+	if err := g.AddAction(p1, models.ActionCheck, 100); err != nil {
+		t.Fatalf("action1: %v", err)
+	}
+	if err := g.AddAction(p2, models.ActionRaise, 300); err != nil {
+		t.Fatalf("action2: %v", err)
+	}
+	if err := g.AddAction(p1, models.ActionFold, 0); err != nil {
+		t.Fatalf("action3: %v", err)
+	}
 	if err := g.End(); err != nil {
 		t.Fatalf("end: %v", err)
 	}
@@ -57,8 +63,12 @@ func TestValidateGameInvalidRaise(t *testing.T) {
 	if err := g.Start(); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	g.AddAction(p1, models.ActionRaise, 200)
-	g.AddAction(p2, models.ActionRaise, 250)
+	if err := g.AddAction(p1, models.ActionRaise, 200); err != nil {
+		t.Fatalf("action1: %v", err)
+	}
+	if err := g.AddAction(p2, models.ActionRaise, 250); err != nil {
+		t.Fatalf("action2: %v", err)
+	}
 	if err := g.End(); err != nil {
 		t.Fatalf("end: %v", err)
 	}
@@ -85,9 +95,15 @@ func TestValidateGameInsufficientCall(t *testing.T) {
 	if err := g.Start(); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	g.AddAction(p1, models.ActionCheck, 100)
-	g.AddAction(p2, models.ActionRaise, 300)
-	g.AddAction(p1, models.ActionCheck, 300)
+	if err := g.AddAction(p1, models.ActionCheck, 100); err != nil {
+		t.Fatalf("action1: %v", err)
+	}
+	if err := g.AddAction(p2, models.ActionRaise, 300); err != nil {
+		t.Fatalf("action2: %v", err)
+	}
+	if err := g.AddAction(p1, models.ActionCheck, 300); err != nil {
+		t.Fatalf("action3: %v", err)
+	}
 	if err := g.End(); err != nil {
 		t.Fatalf("end: %v", err)
 	}

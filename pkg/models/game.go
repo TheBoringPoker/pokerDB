@@ -16,24 +16,29 @@ import (
 )
 
 type Game struct {
-	ID              uuid.UUID    `json:"id" gorm:"primary_key;type:uuid"`
-	TableID         uuid.UUID    `json:"table_id" gorm:"type:uuid"`
-	CardSequence    IntSlice     `json:"card_sequence" gorm:"type:json"`
-	StartedTime     time.Time    `json:"started_time" gorm:"type:timestamp"`
-	EndedTime       time.Time    `json:"ended_time" gorm:"type:timestamp"`
-	PersonCount     int          `json:"person_count" gorm:"type:integer"`
-	Ante            int64        `json:"ante" gorm:"type:bigint"`
-	SmallBlind      int64        `json:"small_blind" gorm:"type:bigint"`
-	BigBlind        int64        `json:"big_blind" gorm:"type:bigint"`
-	AllowRunItTwice bool         `json:"allow_run_it_twice" gorm:"type:boolean"`
-	AllowStraddle   bool         `json:"allow_straddle" gorm:"type:boolean"`
-	MinBuyIn        int64        `json:"min_buy_in" gorm:"type:bigint"`
-	MaxBuyIn        int64        `json:"max_buy_in" gorm:"type:bigint"`
-	BuyIns          BuyInList    `json:"buy_ins" gorm:"type:json"`
-	ActionLog       ActionLog    `json:"action_log" gorm:"type:json"`
-	Ledgers         []Ledger     `json:"ledgers"`
-	NextCardIndex   int          `json:"-" gorm:"-"`
-	mu              sync.RWMutex `json:"-" gorm:"-"`
+	ID              uuid.UUID           `json:"id" gorm:"primary_key;type:uuid"`
+	TableID         uuid.UUID           `json:"table_id" gorm:"type:uuid"`
+	CardSequence    IntSlice            `json:"card_sequence" gorm:"type:json"`
+	StartedTime     time.Time           `json:"started_time" gorm:"type:timestamp"`
+	EndedTime       time.Time           `json:"ended_time" gorm:"type:timestamp"`
+	PersonCount     int                 `json:"person_count" gorm:"type:integer"`
+	Ante            int64               `json:"ante" gorm:"type:bigint"`
+	SmallBlind      int64               `json:"small_blind" gorm:"type:bigint"`
+	BigBlind        int64               `json:"big_blind" gorm:"type:bigint"`
+	AllowRunItTwice bool                `json:"allow_run_it_twice" gorm:"type:boolean"`
+	AllowStraddle   bool                `json:"allow_straddle" gorm:"type:boolean"`
+	MinBuyIn        int64               `json:"min_buy_in" gorm:"type:bigint"`
+	MaxBuyIn        int64               `json:"max_buy_in" gorm:"type:bigint"`
+	BuyIns          BuyInList           `json:"buy_ins" gorm:"type:json"`
+	ActionLog       ActionLog           `json:"action_log" gorm:"type:json"`
+	Ledgers         []Ledger            `json:"ledgers"`
+	NextCardIndex   int                 `json:"-" gorm:"-"`
+	CurrentRound    int                 `json:"current_round" gorm:"-"`
+	CurrentDealer   int                 `json:"current_dealer" gorm:"-"`
+	Stacks          map[uuid.UUID]int64 `json:"-" gorm:"-"`
+	currentBets     map[uuid.UUID]int64 `json:"-" gorm:"-"`
+	inRound         bool                `json:"-" gorm:"-"`
+	mu              sync.RWMutex        `json:"-" gorm:"-"`
 }
 
 func NewGame(tableID uuid.UUID, personCount int) *Game {
@@ -44,6 +49,8 @@ func NewGame(tableID uuid.UUID, personCount int) *Game {
 		PersonCount:  personCount,
 		ActionLog:    ActionLog{},
 		BuyIns:       BuyInList{},
+		Stacks:       make(map[uuid.UUID]int64),
+		currentBets:  make(map[uuid.UUID]int64),
 	}
 }
 
@@ -96,6 +103,14 @@ func (g *Game) Start() error {
 	}
 
 	g.StartedTime = time.Now()
+	g.CurrentRound = 1
+	g.CurrentDealer = 0
+	g.inRound = true
+	g.currentBets = make(map[uuid.UUID]int64)
+	g.Stacks = make(map[uuid.UUID]int64)
+	for _, b := range g.BuyIns {
+		g.Stacks[b.PlayerID] = b.Amount
+	}
 	shuffled := make([]int, len(constants.CardSequence))
 	copy(shuffled, constants.CardSequence)
 	rand.Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
@@ -120,6 +135,7 @@ func (g *Game) End() error {
 		return errors.New("game already ended")
 	}
 	g.EndedTime = time.Now()
+	g.inRound = false
 	pairs := make([]string, len(g.Ledgers))
 	for i, l := range g.Ledgers {
 		id := l.PlayerID.String()
@@ -130,6 +146,35 @@ func (g *Game) End() error {
 	}
 	endEntry := fmt.Sprintf("E:%s,%d", strings.Join(pairs, ":"), g.EndedTime.Unix())
 	g.ActionLog = append(g.ActionLog, endEntry)
+	return nil
+}
+
+// EndRound finishes the current round and rotates the dealer position.
+func (g *Game) EndRound() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if !g.inRound {
+		return errors.New("round not active")
+	}
+	g.inRound = false
+	g.currentBets = make(map[uuid.UUID]int64)
+	g.CurrentDealer = (g.CurrentDealer + 1) % g.PersonCount
+	return nil
+}
+
+// StartRound begins a new round after the previous one has ended.
+func (g *Game) StartRound() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.StartedTime.IsZero() {
+		return errors.New("game not started")
+	}
+	if g.inRound {
+		return errors.New("round already active")
+	}
+	g.CurrentRound++
+	g.inRound = true
+	g.currentBets = make(map[uuid.UUID]int64)
 	return nil
 }
 
@@ -176,8 +221,11 @@ func (g *Game) DealHands() [][]int {
 func (g *Game) BuyIn(playerID uuid.UUID, amount int64) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if !g.StartedTime.IsZero() {
-		return errors.New("cannot buy-in after game start")
+	if !g.EndedTime.IsZero() {
+		return errors.New("game already ended")
+	}
+	if g.inRound {
+		return errors.New("cannot buy-in during active round")
 	}
 	if amount < g.MinBuyIn || (g.MaxBuyIn > 0 && amount > g.MaxBuyIn) {
 		return fmt.Errorf("buy-in must be between %d and %d", g.MinBuyIn, g.MaxBuyIn)
@@ -186,29 +234,42 @@ func (g *Game) BuyIn(playerID uuid.UUID, amount int64) error {
 	if len(id) > 8 {
 		id = id[:8]
 	}
-	for i := range g.BuyIns {
-		if g.BuyIns[i].PlayerID == playerID {
-			g.BuyIns[i].Amount = amount
-			goto log
-		}
-	}
 	g.BuyIns = append(g.BuyIns, BuyIn{PlayerID: playerID, Amount: amount})
-log:
+	g.Stacks[playerID] += amount
 	entry := fmt.Sprintf("%s%s%d,%d", id, ActionBuyIn, amount, time.Now().Unix())
 	g.ActionLog = append(g.ActionLog, entry)
 	return nil
 }
 
 // AddAction appends a new action to the game.
-func (g *Game) AddAction(playerID uuid.UUID, code string, amount int64) {
+func (g *Game) AddAction(playerID uuid.UUID, code string, amount int64) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+
+	if !g.inRound {
+		return errors.New("no active round")
+	}
+	stack, ok := g.Stacks[playerID]
+	if !ok {
+		return fmt.Errorf("unknown player %s", playerID)
+	}
+	need := amount - g.currentBets[playerID]
+	if need < 0 {
+		need = 0
+	}
+	if need > stack {
+		return fmt.Errorf("insufficient chips")
+	}
+	g.Stacks[playerID] = stack - need
+	g.currentBets[playerID] = amount
+
 	id := playerID.String()
 	if len(id) > 8 {
 		id = id[:8]
 	}
 	entry := fmt.Sprintf("%s%s%d,%d", id, code, amount, time.Now().Unix())
 	g.ActionLog = append(g.ActionLog, entry)
+	return nil
 }
 
 // ActionStrings returns human readable lines describing actions in order.
