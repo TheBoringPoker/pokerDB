@@ -27,6 +27,9 @@ type Game struct {
 	BigBlind        int64        `json:"big_blind" gorm:"type:bigint"`
 	AllowRunItTwice bool         `json:"allow_run_it_twice" gorm:"type:boolean"`
 	AllowStraddle   bool         `json:"allow_straddle" gorm:"type:boolean"`
+	MinBuyIn        int64        `json:"min_buy_in" gorm:"type:bigint"`
+	MaxBuyIn        int64        `json:"max_buy_in" gorm:"type:bigint"`
+	BuyIns          BuyInList    `json:"buy_ins" gorm:"type:json"`
 	ActionLog       ActionLog    `json:"action_log" gorm:"type:json"`
 	Ledgers         []Ledger     `json:"ledgers"`
 	NextCardIndex   int          `json:"-" gorm:"-"`
@@ -40,6 +43,7 @@ func NewGame(tableID uuid.UUID, personCount int) *Game {
 		CardSequence: IntSlice(constants.CardSequence),
 		PersonCount:  personCount,
 		ActionLog:    ActionLog{},
+		BuyIns:       BuyInList{},
 	}
 }
 
@@ -78,6 +82,17 @@ func (g *Game) Start() error {
 	if g.PersonCount > 10 {
 		logrus.Warn("Too many players")
 		return errors.New("too many players")
+	}
+
+	if len(g.BuyIns) != g.PersonCount {
+		logrus.Warn("buy-ins not complete")
+		return errors.New("all players must buy in before start")
+	}
+
+	for _, b := range g.BuyIns {
+		if b.Amount < g.MinBuyIn || (g.MaxBuyIn > 0 && b.Amount > g.MaxBuyIn) {
+			return fmt.Errorf("invalid buy-in for player %s", b.PlayerID)
+		}
 	}
 
 	g.StartedTime = time.Now()
@@ -155,6 +170,33 @@ func (g *Game) DealHands() [][]int {
 		hands[i] = g.dealNoLock(2)
 	}
 	return hands
+}
+
+// BuyIn records a player's initial chip stack before the game starts.
+func (g *Game) BuyIn(playerID uuid.UUID, amount int64) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if !g.StartedTime.IsZero() {
+		return errors.New("cannot buy-in after game start")
+	}
+	if amount < g.MinBuyIn || (g.MaxBuyIn > 0 && amount > g.MaxBuyIn) {
+		return fmt.Errorf("buy-in must be between %d and %d", g.MinBuyIn, g.MaxBuyIn)
+	}
+	id := playerID.String()
+	if len(id) > 8 {
+		id = id[:8]
+	}
+	for i := range g.BuyIns {
+		if g.BuyIns[i].PlayerID == playerID {
+			g.BuyIns[i].Amount = amount
+			goto log
+		}
+	}
+	g.BuyIns = append(g.BuyIns, BuyIn{PlayerID: playerID, Amount: amount})
+log:
+	entry := fmt.Sprintf("%s%s%d,%d", id, ActionBuyIn, amount, time.Now().Unix())
+	g.ActionLog = append(g.ActionLog, entry)
+	return nil
 }
 
 // AddAction appends a new action to the game.

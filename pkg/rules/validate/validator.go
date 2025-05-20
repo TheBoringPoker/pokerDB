@@ -36,7 +36,15 @@ func Validate(g *models.Game, stacks map[string]int64) error {
 	if len(g.ActionLog) < 2 {
 		return fmt.Errorf("action log too short")
 	}
-	if !strings.HasPrefix(g.ActionLog[0], "G:") {
+
+	startIdx := -1
+	for i, entry := range g.ActionLog {
+		if strings.HasPrefix(entry, "G:") {
+			startIdx = i
+			break
+		}
+	}
+	if startIdx == -1 {
 		return fmt.Errorf("missing start entry")
 	}
 	if !strings.HasPrefix(g.ActionLog[len(g.ActionLog)-1], "E:") {
@@ -52,8 +60,8 @@ func Validate(g *models.Game, stacks map[string]int64) error {
 		stacks = make(map[string]int64)
 	}
 
-	for i, entry := range g.ActionLog[1 : len(g.ActionLog)-1] {
-		idx := i + 1
+	for i, entry := range g.ActionLog[startIdx+1 : len(g.ActionLog)-1] {
+		idx := i + startIdx + 1
 		parts := strings.SplitN(entry, ",", 2)
 		if len(parts) != 2 {
 			return &ValidationError{Index: idx, Entry: entry, Err: fmt.Errorf("malformed entry")}
