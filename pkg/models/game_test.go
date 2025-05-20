@@ -60,6 +60,32 @@ func TestGameBuyInLogic(t *testing.T) {
 		t.Fatalf("start with buy-ins: %v", err)
 	}
 	if err := g.BuyIn(uuid.New(), 200); err == nil {
-		t.Fatal("expected buy-in after start to fail")
+		t.Fatal("expected buy-in during round to fail")
+	}
+	if err := g.EndRound(); err != nil {
+		t.Fatalf("end round: %v", err)
+	}
+	if err := g.BuyIn(uuid.New(), 200); err != nil {
+		t.Fatalf("buy-in between rounds: %v", err)
+	}
+}
+
+func TestAddActionInsufficientChips(t *testing.T) {
+	g := NewGame(uuid.New(), 2)
+	g.MinBuyIn = 100
+	g.MaxBuyIn = 1000
+	p1 := uuid.New()
+	p2 := uuid.New()
+	if err := g.BuyIn(p1, 100); err != nil {
+		t.Fatalf("buyin1: %v", err)
+	}
+	if err := g.BuyIn(p2, 100); err != nil {
+		t.Fatalf("buyin2: %v", err)
+	}
+	if err := g.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if err := g.AddAction(p1, ActionRaise, 200); err == nil {
+		t.Fatal("expected error on insufficient chips")
 	}
 }

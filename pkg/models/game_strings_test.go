@@ -23,8 +23,12 @@ func TestActionStringsReadable(t *testing.T) {
 	if err := g.Start(); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	g.AddAction(p1, ActionCheck, 0)
-	g.AddAction(p2, ActionRaise, 200)
+	if err := g.AddAction(p1, ActionCheck, 0); err != nil {
+		t.Fatalf("action1: %v", err)
+	}
+	if err := g.AddAction(p2, ActionRaise, 200); err != nil {
+		t.Fatalf("action2: %v", err)
+	}
 	if err := g.End(); err != nil {
 		t.Fatalf("end: %v", err)
 	}

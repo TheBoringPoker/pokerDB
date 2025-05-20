@@ -76,19 +76,20 @@ result [c0ffee00=1000 c0ffee01=-1000] at 2023-08-18T15:01:40Z
 
 ## Buy-In Handling
 
-Games define `MinBuyIn` and `MaxBuyIn` limits. Players must call
-`Game.BuyIn` before the first hand is dealt. Buy-ins are recorded as
-`B` entries in the action log and cannot occur once the game has
-started. Starting the game fails if the number of buy-ins does not
-match `PersonCount` or if any amounts are outside the allowed range.
+Games define `MinBuyIn` and `MaxBuyIn` limits. Buy-ins may occur
+before the first hand or between rounds using `Game.BuyIn`. When a
+round is active buy-ins are rejected. Each buy-in is logged with a `B`
+entry. Starting the game still requires one buy-in per seat and any
+amounts outside the allowed range cause an error.
 
 ## Action Validation
 
-The `validate` package checks recorded actions for consistency. It ensures
-raises satisfy minimum sizing rules and optionally verifies players have
-sufficient chips when calling or raising. Invoke `validate.Validate` with a game
-and an optional map of starting chip counts keyed by the truncated player IDs
-found in the action log.
+The `validate` package checks recorded actions for consistency. In
+addition the `Game` type now validates chip counts as actions are
+recorded so a bet or call cannot exceed the acting player's stack.
+`validate.Validate` can still be used to audit a completed game. Pass a
+map of starting chip counts keyed by the truncated player IDs found in
+the action log.
 
 ## Project Structure
 
