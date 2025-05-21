@@ -59,8 +59,8 @@ func TestGameBuyInLogic(t *testing.T) {
 	if err := g.Start(); err != nil {
 		t.Fatalf("start with buy-ins: %v", err)
 	}
-	if err := g.BuyIn(uuid.New(), 200); err == nil {
-		t.Fatal("expected buy-in during round to fail")
+	if err := g.BuyIn(uuid.New(), 200); err != nil {
+		t.Fatalf("buy-in mid-round: %v", err)
 	}
 	if err := g.EndRound(); err != nil {
 		t.Fatalf("end round: %v", err)
@@ -87,5 +87,49 @@ func TestAddActionInsufficientChips(t *testing.T) {
 	}
 	if err := g.AddAction(p1, ActionRaise, 200); err == nil {
 		t.Fatal("expected error on insufficient chips")
+	}
+}
+
+func TestJoinQuitSeat(t *testing.T) {
+	g := NewGame(uuid.New(), 0)
+	p1 := uuid.New()
+	if err := g.Join(p1); err != nil {
+		t.Fatalf("join: %v", err)
+	}
+	if err := g.ChooseSeat(p1, 3); err != nil {
+		t.Fatalf("seat: %v", err)
+	}
+	if g.NextSeats[p1] != 3 {
+		t.Fatalf("expected seat 3 got %d", g.NextSeats[p1])
+	}
+	if err := g.Quit(p1); err != nil {
+		t.Fatalf("quit: %v", err)
+	}
+	if !g.Ended() {
+		t.Fatalf("game should auto end when last player quits")
+	}
+	if len(g.ActionLog) == 0 {
+		t.Fatalf("expected actions recorded")
+	}
+}
+
+func TestSeatValidation(t *testing.T) {
+	g := NewGame(uuid.New(), 0)
+	p1 := uuid.New()
+	p2 := uuid.New()
+	if err := g.Join(p1); err != nil {
+		t.Fatalf("join1: %v", err)
+	}
+	if err := g.Join(p2); err != nil {
+		t.Fatalf("join2: %v", err)
+	}
+	if err := g.ChooseSeat(p1, 10); err == nil {
+		t.Fatal("expected seat out of range")
+	}
+	if err := g.ChooseSeat(p1, 2); err != nil {
+		t.Fatalf("seat1: %v", err)
+	}
+	if err := g.ChooseSeat(p2, 2); err == nil {
+		t.Fatal("expected seat conflict")
 	}
 }

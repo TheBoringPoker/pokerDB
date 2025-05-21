@@ -15,6 +15,10 @@ import (
 	"time"
 )
 
+// MaxSeats defines the number of seats available at a table.
+// Seat numbers must be between 1 and MaxSeats.
+const MaxSeats = 9
+
 type Game struct {
 	ID              uuid.UUID           `json:"id" gorm:"primary_key;type:uuid"`
 	TableID         uuid.UUID           `json:"table_id" gorm:"type:uuid"`
@@ -36,6 +40,8 @@ type Game struct {
 	CurrentRound    int                 `json:"current_round" gorm:"-"`
 	CurrentDealer   int                 `json:"current_dealer" gorm:"-"`
 	Stacks          map[uuid.UUID]int64 `json:"-" gorm:"-"`
+	Seats           map[uuid.UUID]int   `json:"-" gorm:"-"`
+	NextSeats       map[uuid.UUID]int   `json:"-" gorm:"-"`
 	currentBets     map[uuid.UUID]int64 `json:"-" gorm:"-"`
 	inRound         bool                `json:"-" gorm:"-"`
 	mu              sync.RWMutex        `json:"-" gorm:"-"`
@@ -50,6 +56,8 @@ func NewGame(tableID uuid.UUID, personCount int) *Game {
 		ActionLog:    ActionLog{},
 		BuyIns:       BuyInList{},
 		Stacks:       make(map[uuid.UUID]int64),
+		Seats:        make(map[uuid.UUID]int),
+		NextSeats:    make(map[uuid.UUID]int),
 		currentBets:  make(map[uuid.UUID]int64),
 	}
 }
@@ -86,7 +94,7 @@ func (g *Game) Start() error {
 		return errors.New("not enough players")
 	}
 
-	if g.PersonCount > 10 {
+	if g.PersonCount > MaxSeats {
 		logrus.Warn("Too many players")
 		return errors.New("too many players")
 	}
@@ -147,6 +155,22 @@ func (g *Game) End() error {
 	endEntry := fmt.Sprintf("E:%s,%d", strings.Join(pairs, ":"), g.EndedTime.Unix())
 	g.ActionLog = append(g.ActionLog, endEntry)
 	return nil
+}
+
+// endNoLock finalizes the game without locking. The caller must hold the mutex.
+func (g *Game) endNoLock() {
+	if !g.EndedTime.IsZero() {
+		return
+	}
+	g.EndedTime = time.Now()
+	g.inRound = false
+	pairs := make([]string, len(g.Ledgers))
+	for i, l := range g.Ledgers {
+		id := shortID(l.PlayerID)
+		pairs[i] = fmt.Sprintf("%s=%d", id, l.Balance)
+	}
+	endEntry := fmt.Sprintf("E:%s,%d", strings.Join(pairs, ":"), g.EndedTime.Unix())
+	g.ActionLog = append(g.ActionLog, endEntry)
 }
 
 // EndRound finishes the current round and rotates the dealer position.
@@ -224,9 +248,6 @@ func (g *Game) BuyIn(playerID uuid.UUID, amount int64) error {
 	if !g.EndedTime.IsZero() {
 		return errors.New("game already ended")
 	}
-	if g.inRound {
-		return errors.New("cannot buy-in during active round")
-	}
 	if amount < g.MinBuyIn || (g.MaxBuyIn > 0 && amount > g.MaxBuyIn) {
 		return fmt.Errorf("buy-in must be between %d and %d", g.MinBuyIn, g.MaxBuyIn)
 	}
@@ -237,6 +258,74 @@ func (g *Game) BuyIn(playerID uuid.UUID, amount int64) error {
 	g.BuyIns = append(g.BuyIns, BuyIn{PlayerID: playerID, Amount: amount})
 	g.Stacks[playerID] += amount
 	entry := fmt.Sprintf("%s%s%d,%d", id, ActionBuyIn, amount, time.Now().Unix())
+	g.ActionLog = append(g.ActionLog, entry)
+	return nil
+}
+
+// Join adds a player to the table. The join action is recorded and
+// the player count is updated. Players may join at any time.
+func (g *Game) Join(playerID uuid.UUID) error {
+	g.mu.Lock()
+	if _, ok := g.Seats[playerID]; ok {
+		g.mu.Unlock()
+		return fmt.Errorf("player %s already joined", playerID)
+	}
+	g.Seats[playerID] = -1
+	g.PersonCount = len(g.Seats)
+	entry := fmt.Sprintf("%s%s0,%d", shortID(playerID), ActionJoin, time.Now().Unix())
+	g.ActionLog = append(g.ActionLog, entry)
+	g.mu.Unlock()
+	return nil
+}
+
+// Quit removes a player from the table and records the action. If no
+// players remain the game is automatically ended.
+func (g *Game) Quit(playerID uuid.UUID) error {
+	g.mu.Lock()
+	if _, ok := g.Seats[playerID]; !ok {
+		g.mu.Unlock()
+		return fmt.Errorf("unknown player %s", playerID)
+	}
+	delete(g.Seats, playerID)
+	delete(g.Stacks, playerID)
+	delete(g.currentBets, playerID)
+	g.PersonCount = len(g.Seats)
+	entry := fmt.Sprintf("%s%s0,%d", shortID(playerID), ActionQuit, time.Now().Unix())
+	g.ActionLog = append(g.ActionLog, entry)
+	shouldEnd := g.PersonCount == 0 && g.EndedTime.IsZero()
+	g.mu.Unlock()
+	if shouldEnd {
+		if g.Started() {
+			return g.End()
+		}
+		g.mu.Lock()
+		if g.EndedTime.IsZero() {
+			g.endNoLock()
+		}
+		g.mu.Unlock()
+	}
+	return nil
+}
+
+// ChooseSeat records a seat selection for the next game. The change
+// does not affect the current game but is logged for historical
+// purposes.
+func (g *Game) ChooseSeat(playerID uuid.UUID, seat int) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if _, ok := g.Seats[playerID]; !ok {
+		return fmt.Errorf("unknown player %s", playerID)
+	}
+	if seat < 1 || seat > MaxSeats {
+		return fmt.Errorf("invalid seat %d", seat)
+	}
+	for pid, s := range g.NextSeats {
+		if pid != playerID && s == seat {
+			return fmt.Errorf("seat %d already taken", seat)
+		}
+	}
+	g.NextSeats[playerID] = seat
+	entry := fmt.Sprintf("%s%s%d,%d", shortID(playerID), ActionSeat, seat, time.Now().Unix())
 	g.ActionLog = append(g.ActionLog, entry)
 	return nil
 }
@@ -313,4 +402,12 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+func shortID(id uuid.UUID) string {
+	s := id.String()
+	if len(s) > 8 {
+		return s[:8]
+	}
+	return s
 }

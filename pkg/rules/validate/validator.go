@@ -145,6 +145,9 @@ func Validate(g *models.Game, stacks map[string]int64) error {
 			}
 			playerBets[pid] = 0
 
+		case models.ActionJoin, models.ActionQuit, models.ActionSeat:
+			// joining, quitting and seat selections do not impact validation
+
 		default:
 			return &ValidationError{Index: idx, Entry: entry, Err: fmt.Errorf("unknown action %s", code)}
 		}

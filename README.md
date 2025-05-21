@@ -76,11 +76,19 @@ result [c0ffee00=1000 c0ffee01=-1000] at 2023-08-18T15:01:40Z
 
 ## Buy-In Handling
 
-Games define `MinBuyIn` and `MaxBuyIn` limits. Buy-ins may occur
-before the first hand or between rounds using `Game.BuyIn`. When a
-round is active buy-ins are rejected. Each buy-in is logged with a `B`
-entry. Starting the game still requires one buy-in per seat and any
-amounts outside the allowed range cause an error.
+Games define `MinBuyIn` and `MaxBuyIn` limits. Buy-ins may occur at any
+time using `Game.BuyIn`. Each buy-in is logged with a `B` entry.
+Starting the game still requires one buy-in per seat and any amounts
+outside the allowed range cause an error.
+
+Players can join or leave a running game with `Game.Join` and
+`Game.Quit`. These actions are recorded in the log using the `J` and `Q`
+codes. If the last player quits, the game is automatically ended.
+
+Seat selections for the next game can be made with `Game.ChooseSeat`.
+Seats are numbered 1-9 and a seat may only be selected by one player.
+The chosen seat number is logged with the `H` action code for historic
+tracking.
 
 ## Action Validation
 
