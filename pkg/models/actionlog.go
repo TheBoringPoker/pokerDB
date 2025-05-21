@@ -15,6 +15,9 @@ const (
 	ActionStraddle = "S" // player posts a straddle
 	ActionRunTwice = "T" // players choose run it twice/once
 	ActionBuyIn    = "B" // player buys chips before start
+	ActionJoin     = "J" // player joins the table
+	ActionQuit     = "Q" // player leaves the table
+	ActionSeat     = "H" // player selects seat for next game
 )
 
 // ActionWords maps short action codes to fully spelled words used
@@ -27,6 +30,9 @@ var ActionWords = map[string]string{
 	ActionStraddle: "straddle",
 	ActionRunTwice: "run-twice",
 	ActionBuyIn:    "buy-in",
+	ActionJoin:     "join",
+	ActionQuit:     "quit",
+	ActionSeat:     "seat",
 }
 
 // ActionToWord returns a human readable word for the given action
