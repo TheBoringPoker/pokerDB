@@ -10,6 +10,7 @@ This project uses Go modules. To run the unit tests:
 
 ```bash
 go test ./...
+go test -race ./...
 ```
 
 All tests run purely in-memory and no external database server is required. The
@@ -47,6 +48,8 @@ Tables are created automatically using `AutoMigrate`.
 `Game` objects may be used by multiple goroutines. The struct now embeds a
 mutex so operations like `Start`, `Deal`, `AddAction` and `ActionStrings` are
 safe for concurrent use.
+
+Package `pkg/models` contains a multi-threaded test (`TestGameConcurrentInvalidOps`) that stresses these methods.
 
 ## Compact Action Log
 
